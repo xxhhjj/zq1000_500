@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中证1000 / 中证500 相对价值仪表盘</title>
+<script src="./echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#f2f5fa; --card:#fff; --line:#e6ebf2; --ink:#172033; --muted:#6b7a90;
+    --blue:#1d4ed8; --blue-soft:#e8efff; --red:#d92d20; --green:#039855;
+    --amber:#d97706; --shadow:0 2px 12px rgba(23,32,51,.06);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6;}
+  a{color:inherit;}
+
+  .hero{background:linear-gradient(115deg,#0b1f4d 0%,#173e8f 55%,#1d4ed8 100%);color:#fff;
+    padding:30px 0 34px;position:relative;overflow:hidden;}
+  .hero:after{content:"";position:absolute;inset:0;opacity:.14;
+    background-image:linear-gradient(rgba(255,255,255,.25) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.25) 1px,transparent 1px);
+    background-size:34px 34px;mask-image:linear-gradient(90deg,#000,transparent 75%);}
+  .hero-in{max-width:1340px;margin:0 auto;padding:0 26px;position:relative;z-index:1;
+    display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:18px;}
+  .eyebrow{font-size:11px;letter-spacing:2.4px;opacity:.72;font-weight:600;margin-bottom:7px;}
+  .hero h1{margin:0;font-size:27px;font-weight:700;letter-spacing:.4px;}
+  .hero .sub{margin-top:5px;font-size:13.5px;opacity:.86;}
+  .hero-meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-size:12px;}
+  .pill{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+    padding:5px 13px;border-radius:20px;backdrop-filter:blur(4px);}
+  .pill b{font-weight:700;}
+  .hero-meta .small{opacity:.78;}
+
+  main{max-width:1340px;margin:0 auto;padding:22px 26px 60px;}
+  .strip{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+  .chip{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:9px 15px;box-shadow:var(--shadow);font-size:12.5px;color:var(--muted);}
+  .chip b{color:var(--ink);font-size:13.5px;margin-left:7px;}
+  .chip.zone-high{background:#fff1f0;border-color:#fecaca;color:#b42318;}
+  .chip.zone-high b{color:var(--red);}
+  .chip.zone-low{background:#ecfdf3;border-color:#a6f4c5;color:#027a48;}
+  .chip.zone-low b{color:var(--green);}
+
+  .toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:16px;}
+  .toolbar .lab{color:var(--muted);font-size:12.5px;margin-right:4px;}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 17px;
+    border-radius:9px;cursor:pointer;font-size:13px;transition:.15s;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .btn.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;box-shadow:0 3px 10px rgba(29,78,216,.25);}
+  .spacer{flex:1;}
+  .btn.ghost{background:transparent;}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:13px;margin-bottom:16px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:16px 18px;box-shadow:var(--shadow);}
+  .kpi .t{font-size:11.5px;color:var(--muted);letter-spacing:.3px;}
+  .kpi .v{font-size:26px;font-weight:750;letter-spacing:-.5px;margin:5px 0 2px;font-variant-numeric:tabular-nums;}
+  .kpi .d{font-size:11.5px;color:var(--muted);}
+  .pos{color:var(--red)!important;} .neg{color:var(--green)!important;}
+  .gauge{margin-top:11px;}
+  .g-track{height:7px;border-radius:5px;background:linear-gradient(90deg,#039855 0%,#86efac 22%,#e2e8f0 50%,#fca5a5 78%,#d92d20 100%);position:relative;}
+  .g-pin{position:absolute;top:-4px;width:3px;height:15px;background:#172033;border-radius:2px;box-shadow:0 0 0 2px #fff;}
+  .g-lab{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+  @media(max-width:1000px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:17px 18px;box-shadow:var(--shadow);}
+  .card h3{margin:0;font-size:15px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
+  .card h3 small{font-size:11.5px;color:var(--muted);font-weight:400;}
+  .card .desc{font-size:11.5px;color:var(--muted);margin:7px 0 6px;line-height:1.65;}
+  .chart{width:100%;height:370px;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;}
+  th,td{padding:8px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;}
+  th{color:var(--muted);font-weight:600;background:#f8fafc;font-size:11.5px;}
+  th:first-child,td:first-child{text-align:left;}
+  tbody tr:hover{background:#f8fafc;}
+  .hl td{background:#eef4ff;}
+
+  .note{font-size:12px;color:var(--muted);line-height:1.85;}
+  .note b{color:var(--ink);}
+  .err{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:14px 18px;
+    border-radius:12px;margin-bottom:16px;font-size:13px;}
+  .foot{text-align:center;color:var(--muted);font-size:11.5px;margin-top:24px;}
+  .disc{background:#fff8f2;border-left:3px solid #e08a3c;border-radius:6px;
+    padding:11px 14px;font-size:12px;color:#7a4a1e;margin-top:12px;}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-in">
+    <div>
+      <div class="eyebrow">RELATIVE VALUE DASHBOARD</div>
+      <h1>中证1000 / 中证500 相对价值仪表盘</h1>
+      <div class="sub">价差 · 比价 · 滚动历史分位　|　IF / IC 跨期套利的相对强弱参考</div>
+    </div>
+    <div class="hero-meta">
+      <span class="pill">数据来源 <b>东方财富 · 沪深指数</b> ↗</span>
+      <span class="pill small">数据更新 <b id="updatedAt">加载中…</b></span>
+      <span class="pill small">页面版本 <b id="buildVer">v3.2-20261124</b></span>
+      <span class="small">每交易日收盘后自动更新 · GitHub Pages</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="errBox" class="err" style="display:none"></div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="toolbar">
+    <span class="lab">时间窗口</span>
+    <button class="btn" data-w="1Y">1年</button>
+    <button class="btn" data-w="3Y">3年</button>
+    <button class="btn" data-w="5Y">5年</button>
+    <button class="btn" data-w="10Y">10年</button>
+    <button class="btn on" data-w="ALL">全部</button>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="btnRefresh">重新加载文件</button>
+    <button class="btn" id="btnUpdate" style="border-color:#1d4ed8;color:#1d4ed8;">↻ 更新行情（东财 / 腾讯）</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>价差走势 <small>中证1000 − 中证500（点）</small></h3>
+      <div class="desc">P10 / P50 / P90 虚线为<b>扩展窗口逐日滚动</b>的历史分位阈值，随时间变化；浅色带为 P10–P90、P25–P75 区间。红线为当前值。</div>
+      <div id="cSpread" class="chart"></div>
+    </div>
+    <div class="card">
+      <h3>比价走势 <small>中证1000 ÷ 中证500</small></h3>
+      <div class="desc">比值 &gt; 1 表示中证1000 点位更高；比价剔除绝对点位影响，与价差互为补充。分位带同样逐日滚动。</div>
+      <div id="cRatio" class="chart"></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>历史百分位 <small>价差 / 比价，0% 最低 · 100% 最高</small></h3>
+      <div class="desc">按「窗口首日至当日」递推计算当前值所处的分位位置，无未来函数。&gt;80% 高位区，&lt;20% 低位区。</div>
+      <div id="cPct" class="chart"></div>
+    </div>
+    <div class="card">
+      <h3>两指数归一化走势 <small>窗口首日 = 100</small></h3>
+      <div class="desc">两条线张开＝风格分化；收拢＝趋同。价差/比价的变化来源一目了然。</div>
+      <div id="cNorm" class="chart"></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>分位数统计 <small>当前窗口</small></h3>
+      <div class="desc" style="margin-bottom:9px">当前值在窗口样本中的分位与偏离程度。</div>
+      <table id="tblStats"></table>
+    </div>
+    <div class="card">
+      <h3>跨窗口分位对照 <small>同一当前值，不同时间尺度</small></h3>
+      <div class="desc" style="margin-bottom:9px">短周期极端 ≠ 长周期极端；多尺度对照可区分「短期噪音」与「历史极位」。</div>
+      <table id="tblCross"></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>数据与方法说明</h3>
+    <div class="note" style="margin-top:8px">
+      · <b>数据源</b>：东方财富网沪深指数行情中心 <a href="https://quote.eastmoney.com/center/hszs.html" target="_blank" rel="noopener">quote.eastmoney.com/center/hszs.html</a>，接口取日线收盘价；中证1000 = 000852，中证500 = 000905。<br>
+      · <b>回溯区间</b>：东财提供 2005 年起的数据，其中 2014-10-17（中证1000 正式发布）之前为指数回溯模拟值，研究实盘区间时建议以 10 年窗口为准。<br>
+      · <b>指标</b>：价差 = 000852 收盘 − 000905 收盘；比价 = 000852 收盘 ÷ 000905 收盘。<br>
+      · <b>滚动分位</b>：第 t 日使用 [窗口首日, t] 的已实现样本计算 P10/P25/P50/P75/P90，样本从 1 开始逐步累积（初期带宽为 0，后期趋稳），不使用未来数据。<br>
+      · <b>分位排名</b> =（小于当前值的样本数 + 0.5×等于的个数）/ 样本总数 × 100%。<br>
+      · <b>自动更新</b>：GitHub Actions 每个交易日 16:00（北京时间）拉取东财数据并重建 data.json，GitHub Pages 随之发布；页面打开时读取最新 data.json。<br>
+      · 本页为价格指数的相对强弱统计刻画，不含分红、基差与展期成本；实盘对应工具为 IM / IC 股指期货，需另计基差。
+    </div>
+    <div class="disc"><b>免责声明</b>：以上内容基于公开数据和量化分析，仅供参考，不构成投资建议。市场有风险，投资需谨慎。任何投资决策应结合个人风险承受能力、资金状况和投资目标独立判断，必要时咨询持牌专业机构。过往表现不预示未来收益。</div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</main>
+
+<script>
+var MUTED = '#6b7a90';
+var J = null, D = [], N = 0, dates = [], sp = [], rt = [], pa = [], pb = [];
+var pS = [], pR = [], curW = 'ALL', curStart = 0;
+var charts = {};
+
+function f2(v){ return (Math.round(v*100)/100).toFixed(2); }
+function f4(v){ return (Math.round(v*10000)/10000).toFixed(4); }
+function p1(v){ return (Math.round(v*10)/10).toFixed(1)+'%'; }
+function mean(a){ var s=0,i; for(i=0;i<a.length;i++){s+=a[i];} return s/a.length; }
+function sd(a){ var m=mean(a),s=0,i; for(i=0;i<a.length;i++){s+=(a[i]-m)*(a[i]-m);} return Math.sqrt(s/a.length); }
+function quant(sorted,p){
+  var n=sorted.length; if(!n){return NaN;}
+  var idx=(n-1)*p, lo=Math.floor(idx), hi=Math.ceil(idx);
+  if(lo===hi){ return sorted[lo]; }
+  return sorted[lo]+(sorted[hi]-sorted[lo])*(idx-lo);
+}
+function rank(sorted,v){
+  var n=sorted.length, lo=0, hi=n, m, i, eq=0;
+  while(lo<hi){ m=(lo+hi)>>1; if(sorted[m]<v){lo=m+1;}else{hi=m;} }
+  i=lo; while(i<n && sorted[i]===v){eq++;i++;}
+  return (lo+eq/2)/n*100;
+}
+function expandPct(arr){
+  var n=arr.length,out=new Array(n),seen=[],i,v,lo,hi,m;
+  for(i=0;i<n;i++){
+    v=arr[i]; lo=0; hi=seen.length;
+    while(lo<hi){ m=(lo+hi)>>1; if(seen[m]<v){lo=m+1;}else{hi=m;} }
+    seen.splice(lo,0,v); out[i]=(lo+1)/seen.length*100;
+  }
+  return out;
+}
+function rollingQuantiles(arr,ps){
+  var n=arr.length,out=[],i,j;
+  for(j=0;j<ps.length;j++){out.push(new Array(n));}
+  var sorted=[];
+  for(i=0;i<n;i++){
+    var v=arr[i],lo=0,hi=sorted.length,m;
+    while(lo<hi){ m=(lo+hi)>>1; if(sorted[m]<v){lo=m+1;}else{hi=m;} }
+    sorted.splice(lo,0,v);
+    for(j=0;j<ps.length;j++){out[j][i]=quant(sorted,ps[j]);}
+  }
+  return out;
+}
+function stats(arr,qs){
+  var sorted=arr.slice().sort(function(a,b){return a-b;});
+  var o={min:sorted[0],max:sorted[sorted.length-1],mid:quant(sorted,.5),avg:mean(arr),
+         sd:sd(arr),last:arr[arr.length-1],n:arr.length,sorted:sorted,q:{}};
+  qs.forEach(function(p){o.q[p]=quant(sorted,p);});
+  o.pct=rank(sorted,o.last); o.z=o.sd?(o.last-o.avg)/o.sd:0;
+  return o;
+}
+
+var WINDEF={'1Y':365,'3Y':1095,'5Y':1825,'10Y':3650,'ALL':null};
+var WINLAB={'1Y':'近 1 年','3Y':'近 3 年','5Y':'近 5 年','10Y':'近 10 年','ALL':'全部历史'};
+function winRange(w){
+  var days=WINDEF[w]; if(days===null){return 0;}
+  var last=new Date(D[N-1].d+'T00:00:00');
+  var cut=new Date(last.getTime()-days*86400000);
+  var cs=cut.getFullYear()+'-'+('0'+(cut.getMonth()+1)).slice(-2)+'-'+('0'+cut.getDate()).slice(-2);
+  var i=0; while(i<N && D[i].d<cs){i++;}
+  return i;
+}
+
+function baseX(xd){return {type:'category',data:xd,boundaryGap:false,
+  axisLine:{lineStyle:{color:'#cfd8e6'}},axisLabel:{color:MUTED,fontSize:10},splitLine:{show:false}};}
+function baseY(name,fmt){return {type:'value',name:name,scale:true,
+  nameTextStyle:{color:MUTED,fontSize:10},axisLine:{show:false},axisTick:{show:false},
+  axisLabel:{color:MUTED,fontSize:10,formatter:fmt},splitLine:{lineStyle:{color:'#eef1f6'}}};}
+function dz(){return [{type:'inside',start:0,end:100},
+  {type:'slider',height:20,bottom:18,borderColor:'#e2e8f0',fillerColor:'rgba(29,78,216,.12)',
+   handleStyle:{color:'#1d4ed8'},textStyle:{color:'#6b7a90',fontSize:9}}];}
+
+function tip(p){
+  var i=p[0].dataIndex+curStart, r=D[i];
+  return '<b>'+r.d+'</b><br>中证1000 '+f2(r.a)+'　中证500 '+f2(r.b)+
+    '<br>价差 <b>'+f2(r.s)+'</b>　比价 <b>'+f4(r.r)+'</b>'+
+    '<br>滚动分位：价差 '+p1(pS[i])+'　比价 '+p1(pR[i]);
+}
+
+function drawSeries(id,vals,st,title,fmt,rqs){
+  var xd=dates.slice(curStart), vv=vals.slice(curStart), start=curStart;
+  function seg(k){ return (rqs&&rqs[k])?rqs[k].slice(start):null; }
+  function band(hi,lo){
+    var a=seg(hi),b=seg(lo); if(!a||!b){return null;}
+    return a.map(function(v,i){ return (v===null||b[i]===null)?null:Math.round((v-b[i])*1e6)/1e6; });
+  }
+  var series=[{name:title,type:'line',data:vv,showSymbol:false,sampling:'lttb',z:4,
+    lineStyle:{width:1.9,color:'#1d4ed8'},itemStyle:{color:'#1d4ed8'},
+    markLine:{silent:true,symbol:'none',data:[{yAxis:st.last,
+      lineStyle:{color:'#d92d20',width:1.3},
+      label:{formatter:'当前 '+fmt(st.last),position:'insideEndTop',color:'#d92d20',fontSize:10,fontWeight:'bold'}}]}}];
+  if(seg(0)){
+    var inv={type:'line',showSymbol:false,symbol:'none',silent:true,z:1,
+      lineStyle:{opacity:0},itemStyle:{opacity:0},areaStyle:{color:'transparent'},tooltip:{show:false}};
+    series.push(Object.assign({},inv,{name:'_b10a',data:seg(0),stack:'b10'}));
+    series.push(Object.assign({},inv,{name:'_b10b',data:band(4,0),stack:'b10',areaStyle:{color:'rgba(29,78,216,.08)'}}));
+    series.push(Object.assign({},inv,{name:'_b25a',data:seg(1),stack:'b25'}));
+    series.push(Object.assign({},inv,{name:'_b25b',data:band(3,1),stack:'b25',areaStyle:{color:'rgba(29,78,216,.14)'}}));
+    series.push({name:'P90',type:'line',data:seg(4),showSymbol:false,symbol:'none',silent:true,z:2,
+      lineStyle:{width:1,type:'dashed',color:'#d92d20',opacity:.7},itemStyle:{color:'#d92d20'}});
+    series.push({name:'P10',type:'line',data:seg(0),showSymbol:false,symbol:'none',silent:true,z:2,
+      lineStyle:{width:1,type:'dashed',color:'#039855',opacity:.7},itemStyle:{color:'#039855'}});
+    series.push({name:'P50',type:'line',data:seg(2),showSymbol:false,symbol:'none',silent:true,z:2,
+      lineStyle:{width:1,type:'dashed',color:'#98a3b5',opacity:.9},itemStyle:{color:'#98a3b5'}});
+  }
+  charts[id].setOption({tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:tip},
+    grid:{left:58,right:24,top:22,bottom:66},xAxis:baseX(xd),
+    yAxis:baseY(title,function(v){return fmt(v);}),dataZoom:dz(),series:series},true);
+}
+
+function drawPct(){
+  charts.pct.setOption({tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:tip},
+    legend:{data:['价差分位','比价分位'],top:0,textStyle:{fontSize:10,color:MUTED}},
+    grid:{left:52,right:22,top:30,bottom:66},xAxis:baseX(dates.slice(curStart)),
+    yAxis:{type:'value',name:'%',min:0,max:100,nameTextStyle:{color:MUTED,fontSize:10},
+      axisLine:{show:false},axisTick:{show:false},axisLabel:{color:MUTED,fontSize:10,formatter:'{value}'},
+      splitLine:{lineStyle:{color:'#eef1f6'}}},
+    dataZoom:dz(),
+    series:[
+      {name:'价差分位',type:'line',data:pS.slice(curStart),showSymbol:false,sampling:'lttb',
+       lineStyle:{width:1.5,color:'#d92d20'},itemStyle:{color:'#d92d20'}},
+      {name:'比价分位',type:'line',data:pR.slice(curStart),showSymbol:false,sampling:'lttb',
+       lineStyle:{width:1.5,color:'#d97706'},itemStyle:{color:'#d97706'}},
+      {name:'_ref',type:'line',data:[],silent:true,
+       markLine:{silent:true,symbol:'none',lineStyle:{type:'dashed',width:1,color:'#98a3b5'},
+         data:[{yAxis:80,label:{formatter:'80%',fontSize:9,color:'#8a94a6'}},
+               {yAxis:50,label:{formatter:'50%',fontSize:9,color:'#8a94a6'}},
+               {yAxis:20,label:{formatter:'20%',fontSize:9,color:'#8a94a6'}}]}}
+    ]},true);
+}
+
+function drawNorm(){
+  var s=curStart, b1=pa[s], b2=pb[s];
+  var n1=pa.map(function(v){return Math.round(v/b1*1000)/10;});
+  var n2=pb.map(function(v){return Math.round(v/b2*1000)/10;});
+  charts.norm.setOption({tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:tip},
+    legend:{data:['中证1000','中证500'],top:0,textStyle:{fontSize:10,color:MUTED}},
+    grid:{left:52,right:22,top:30,bottom:66},xAxis:baseX(dates.slice(s)),
+    yAxis:baseY('归一化',function(v){return v.toFixed(0);}),
+    dataZoom:dz(),
+    series:[
+      {name:'中证1000',type:'line',data:n1.slice(s),showSymbol:false,sampling:'lttb',
+       lineStyle:{width:1.5,color:'#d92d20'},itemStyle:{color:'#d92d20'}},
+      {name:'中证500',type:'line',data:n2.slice(s),showSymbol:false,sampling:'lttb',
+       lineStyle:{width:1.5,color:'#1d4ed8'},itemStyle:{color:'#1d4ed8'}}
+    ]},true);
+}
+
+function gauge(pct){
+  return '<div class="gauge"><div class="g-track"><div class="g-pin" style="left:'+
+    Math.max(0,Math.min(100,pct))+'%"></div></div>'+
+    '<div class="g-lab"><span>中证500 占优</span><span>中位</span><span>中证1000 占优</span></div></div>';
+}
+
+function render(w){
+  curW=w; curStart=winRange(w);
+  var s=curStart, sub=D.slice(s);
+  var sS=stats(sub.map(function(x){return x.s;}),[.1,.25,.5,.75,.9]);
+  var sR=stats(sub.map(function(x){return x.r;}),[.1,.25,.5,.75,.9]);
+  var Q=[.1,.25,.5,.75,.9];
+  var rqS=rollingQuantiles(sub.map(function(x){return x.s;}),Q);
+  var rqR=rollingQuantiles(sub.map(function(x){return x.r;}),Q);
+  function pad(a){var o=[];for(var i=0;i<s;i++){o.push(null);}return o.concat(a);}
+  rqS=rqS.map(pad); rqR=rqR.map(pad);
+  var eS=expandPct(sub.map(function(x){return x.s;}));
+  var eR=expandPct(sub.map(function(x){return x.r;}));
+  pS=[];pR=[];
+  for(var k=0;k<s;k++){pS.push(null);pR.push(null);}
+  for(var k2=0;k2<eS.length;k2++){pS.push(eS[k2]);pR.push(eR[k2]);}
+
+  var avgPct=(sS.pct+sR.pct)/2;
+  var zone=avgPct>=80?'历史高位区':avgPct>=60?'偏高':avgPct>=40?'中位附近':avgPct>=20?'偏低':'历史低位区';
+  var zc=avgPct>=80?'zone-high':avgPct<20?'zone-low':'';
+  var ld=D[N-1], prev=D[N-2], d1=ld.a-prev.a, d2=ld.b-prev.b;
+  document.getElementById('strip').innerHTML=
+    '<span class="chip '+zc+'">相对状态 <b>'+zone+'</b></span>'+
+    '<span class="chip">窗口 <b>'+WINLAB[w]+' · '+sub.length+' 个交易日</b></span>'+
+    '<span class="chip">数据区间 <b>'+D[0].d+' ~ '+ld.d+'</b></span>'+
+    '<span class="chip">末日中证1000 <b>'+f2(ld.a)+'</b></span>'+
+    '<span class="chip">末日中证500 <b>'+f2(ld.b)+'</b></span>';
+
+  document.getElementById('kpis').innerHTML=
+    '<div class="kpi"><div class="t">价差 · 中证1000 − 中证500</div><div class="v">'+f2(ld.s)+'</div>'+
+      '<div class="d">日变动 <span class="'+(ld.s>=prev.a-prev.b?'pos':'neg')+'">'+
+        f2(ld.s-(prev.a-prev.b))+'</span>　窗口均值 '+f2(sS.avg)+'</div></div>'+
+    '<div class="kpi"><div class="t">比价 · 中证1000 ÷ 中证500</div><div class="v">'+f4(ld.r)+'</div>'+
+      '<div class="d">窗口均值 '+f4(sR.avg)+'　z = '+f2(sR.z)+'</div></div>'+
+    '<div class="kpi"><div class="t">价差历史分位</div><div class="v '+(sS.pct>=80?'pos':sS.pct<20?'neg':'')+'">'+p1(sS.pct)+'</div>'+
+      '<div class="d">窗口 P10 '+f2(sS.q[.1])+'　P50 '+f2(sS.mid)+'　P90 '+f2(sS.q[.9])+'</div>'+gauge(sS.pct)+'</div>'+
+    '<div class="kpi"><div class="t">比价历史分位</div><div class="v '+(sR.pct>=80?'pos':sR.pct<20?'neg':'')+'">'+p1(sR.pct)+'</div>'+
+      '<div class="d">窗口 P10 '+f4(sR.q[.1])+'　P50 '+f4(sR.mid)+'　P90 '+f4(sR.q[.9])+'</div>'+gauge(sR.pct)+'</div>'+
+    '<div class="kpi"><div class="t">价差 z 值</div><div class="v">'+f2(sS.z)+'</div>'+
+      '<div class="d">距中位 '+(ld.s>=sS.mid?'+':'')+f2(ld.s-sS.mid)+' 点　窗口 σ '+f2(sS.sd)+'</div></div>'+
+    '<div class="kpi"><div class="t">当日涨跌</div><div class="v"><span class="'+(d1>=0?'pos':'neg')+'">'+
+      (d1>=0?'+':'')+f2(d1)+'</span> <span style="font-size:14px;color:#6b7a90">/</span> <span class="'+(d2>=0?'pos':'neg')+'">'+
+      (d2>=0?'+':'')+f2(d2)+'</span></div><div class="d">中证1000 / 中证500 点位变动</div></div>';
+
+  drawSeries('spread',sp,sS,'价差（点）',f2,rqS);
+  drawSeries('ratio',rt,sR,'比价',f4,rqR);
+  drawPct(); drawNorm();
+
+  var h='<thead><tr><th>指标</th><th>样本</th><th>最小</th><th>P10</th><th>P25</th><th>中位</th><th>P75</th><th>P90</th><th>最大</th><th>均值</th><th>σ</th><th>当前</th><th>分位</th><th>z</th></tr></thead><tbody>';
+  [['价差',sS,f2],['比价',sR,f4]].forEach(function(x){
+    var t=x[1],f=x[2];
+    h+='<tr><td><b>'+x[0]+'</b></td><td>'+t.n+'</td><td>'+f(t.min)+'</td><td>'+f(t.q[.1])+'</td><td>'+f(t.q[.25])+'</td><td>'+f(t.mid)+'</td><td>'+f(t.q[.75])+'</td><td>'+f(t.q[.9])+'</td><td>'+f(t.max)+'</td><td>'+f(t.avg)+'</td><td>'+f(t.sd)+'</td><td><b>'+f(t.last)+'</b></td><td><b>'+p1(t.pct)+'</b></td><td>'+f2(t.z)+'</td></tr>';
+  });
+  document.getElementById('tblStats').innerHTML=h+'</tbody>';
+
+  var h2='<thead><tr><th>窗口</th><th>起始日</th><th>样本</th><th>价差</th><th>价差分位</th><th>比价</th><th>比价分位</th></tr></thead><tbody>';
+  ['1Y','3Y','5Y','10Y','ALL'].forEach(function(w2){
+    var k=winRange(w2), sb=D.slice(k);
+    var a1=stats(sb.map(function(x){return x.s;}),[]), a2=stats(sb.map(function(x){return x.r;}),[]);
+    h2+='<tr'+(w2===w?' class="hl"':'')+'><td>'+WINLAB[w2]+'</td><td>'+sb[0].d+'</td><td>'+sb.length+'</td><td>'+f2(a1.last)+'</td><td><b>'+p1(a1.pct)+'</b></td><td>'+f4(a2.last)+'</td><td><b>'+p1(a2.pct)+'</b></td></tr>';
+  });
+  document.getElementById('tblCross').innerHTML=h2+'</tbody>';
+}
+
+function boot(data){
+  J=data; D=data.data; N=D.length;
+  dates=D.map(function(x){return x.d;});
+  sp=D.map(function(x){return x.s;}); rt=D.map(function(x){return x.r;});
+  pa=D.map(function(x){return x.a;}); pb=D.map(function(x){return x.b;});
+  document.getElementById('updatedAt').textContent=data.meta.updatedAt;
+  document.getElementById('foot').textContent='数据来源：'+data.meta.source+'　|　共 '+N+' 个交易日（'+data.meta.start+' ~ '+data.meta.end+'）　|　自动更新于每交易日收盘后';
+  charts={spread:echarts.init(document.getElementById('cSpread')),
+          ratio:echarts.init(document.getElementById('cRatio')),
+          pct:echarts.init(document.getElementById('cPct')),
+          norm:echarts.init(document.getElementById('cNorm'))};
+  render('ALL');
+  window.addEventListener('resize',function(){Object.keys(charts).forEach(function(k){charts[k].resize();});});
+}
+
+function load(){
+  fetch('data.json?t='+Date.now(),{cache:'no-store'}).then(function(r){
+    if(!r.ok){throw new Error('HTTP '+r.status);} return r.json();
+  }).then(function(d){
+    document.getElementById('errBox').style.display='none';
+    if(J){ Object.keys(charts).forEach(function(k){charts[k].dispose();}); }
+    boot(d);
+  }).catch(function(e){
+    var box=document.getElementById('errBox');
+    box.style.display='block';
+    box.innerHTML='<b>数据加载失败</b>：'+e.message+'。请通过 HTTP 服务打开本页（例如 <code>python -m http.server</code>），GitHub Pages 上会自动读取最新 data.json。';
+  });
+}
+
+Array.prototype.forEach.call(document.querySelectorAll('.btn[data-w]'),function(b){
+  b.addEventListener('click',function(){
+    Array.prototype.forEach.call(document.querySelectorAll('.btn[data-w]'),function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    if(J){ render(b.getAttribute('data-w')); }
+  });
+});
+/* JSONP：东财 cb= 是函数调用，腾讯 _var= 是变量赋值，两种都要支持 */
+function jsonp(url, varName, style, timeout){
+  return new Promise(function(resolve,reject){
+    var s=document.createElement('script'), done=false;
+    var ms=timeout||12000;
+    var t=setTimeout(function(){finish(null,new Error('请求超时（'+Math.round(ms/1000)+'秒）'));},ms);
+    function finish(data,err){
+      if(done){return;} done=true; clearTimeout(t);
+      try{ if(s.parentNode){s.parentNode.removeChild(s);} }catch(e){}
+      if(style==='call'){
+        try{ delete window[varName]; }catch(e){ window[varName]=undefined; }
+      }else{
+        var v=window[varName];
+        try{ delete window[varName]; }catch(e){ window[varName]=undefined; }
+        if(!err&&v===undefined){err=new Error('返回内容为空');}
+        data=v;
+      }
+      if(err){reject(err);}else{resolve(data);}
+    }
+    if(style==='call'){
+      window[varName]=function(data){finish(data,null);};
+    }
+    s.src=url;
+    s.onload=function(){
+      if(style==='var'){ setTimeout(function(){finish(window[varName],null);},0); }
+    };
+    s.onerror=function(){finish(null,new Error('脚本加载失败'));};
+    document.head.appendChild(s);
+  });
+}
+
+function rowsFromMaps(ma,mb){
+  var rows=[];
+  Object.keys(ma).forEach(function(d){
+    if(mb[d]&&mb[d]>0&&ma[d]>0){
+      rows.push({d:d,a:ma[d],b:mb[d],
+        s:Math.round((ma[d]-mb[d])*100)/100,
+        r:Math.round(ma[d]/mb[d]*1000000)/1000000});
+    }
+  });
+  rows.sort(function(x,y){return x.d<y.d?-1:1;});
+  return rows;
+}
+
+function fetchEastmoney(){
+  var stamp=Date.now(), ca='emA'+stamp, cb='emB'+stamp;
+  var base='https://push2his.eastmoney.com/api/qt/stock/kline/get?klt=101&fqt=1&beg=0&end=20500101'
+    +'&lmt=100000&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58&cb=';
+  return Promise.all([
+    jsonp(base+ca+'&secid=1.000852&_='+stamp,ca,'call',12000),
+    jsonp(base+cb+'&secid=1.000905&_='+stamp,cb,'call',12000)
+  ]).then(function(rs){
+    var ma={},mb={};
+    ((rs[0]&&rs[0].data&&rs[0].data.klines)||[]).forEach(function(l){
+      var p=l.split(','); if(p.length>2){ma[p[0]]=parseFloat(p[2]);}
+    });
+    ((rs[1]&&rs[1].data&&rs[1].data.klines)||[]).forEach(function(l){
+      var p=l.split(','); if(p.length>2){mb[p[0]]=parseFloat(p[2]);}
+    });
+    var rows=rowsFromMaps(ma,mb);
+    if(rows.length<100){throw new Error('返回样本不足（'+rows.length+'）');}
+    return {rows:rows,source:'东方财富网 · 沪深指数行情中心'};
+  });
+}
+
+function fetchTencent(){
+  var stamp=Date.now(), ca='txA'+stamp, cb='txB'+stamp;
+  var base='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=';
+  var tail=',day,2019-01-01,2030-12-31,2000,qfq&_var=';
+  return Promise.all([
+    jsonp(base+'sh000852'+tail+ca+'&_='+stamp,ca,'var',12000),
+    jsonp(base+'sh000905'+tail+cb+'&_='+stamp,cb,'var',12000)
+  ]).then(function(rs){
+    var ma={},mb={};
+    var da=(rs[0]&&rs[0].data&&rs[0].data.sh000852&&rs[0].data.sh000852.day)||
+           (rs[0]&&rs[0].data&&rs[0].data.sh000852&&rs[0].data.sh000852.qfqday)||[];
+    var db=(rs[1]&&rs[1].data&&rs[1].data.sh000905&&rs[1].data.sh000905.day)||
+           (rs[1]&&rs[1].data&&rs[1].data.sh000905&&rs[1].data.sh000905.qfqday)||[];
+    da.forEach(function(x){ma[x[0]]=parseFloat(x[2]);});
+    db.forEach(function(x){mb[x[0]]=parseFloat(x[2]);});
+    var rows=rowsFromMaps(ma,mb);
+    if(rows.length<100){throw new Error('返回样本不足（'+rows.length+'）');}
+    return {rows:rows,source:'腾讯财经 · 沪深指数日线（兜底源）'};
+  });
+}
+
+function updateFromEastmoney(){
+  var btn=document.getElementById('btnUpdate');
+  btn.disabled=true; btn.textContent='正在拉取行情…';
+  var oldLast=(J&&J.data&&J.data.length)?J.data[J.data.length-1]:null;
+  var oldCount=J&&J.data?J.data.length:0;
+  var errors=[];
+  var chain=[fetchEastmoney,fetchTencent], i=0, best=null;
+  function next(){
+    if(i<chain.length){
+      return chain[i++]().then(function(r){
+        if(!best||r.rows[r.rows.length-1].d>best.rows[best.rows.length-1].d){best=r;}
+        // 已拿到比本地更新的数据就不必再试兜底源
+        if(best.rows[best.rows.length-1].d>(oldLast?oldLast.d:'')){i=chain.length;}
+        return next();
+      }).catch(function(e){
+        errors.push((i===1?'东方财富':'腾讯财经')+'：'+(e&&e.message?e.message:'未知错误'));
+        return next();
+      });
+    }
+    return Promise.resolve(best);
+  }
+  next().then(function(got){
+    if(!got){throw new Error('两个数据源均不可用（'+errors.join('；')+'）');}
+    var map={}, rows=(J&&J.data)?J.data.slice():[];
+    rows.forEach(function(r){map[r.d]=r;});
+    var added=0;
+    got.rows.forEach(function(r){
+      if(!map[r.d]){added++;}
+      map[r.d]=r;
+    });
+    rows=Object.keys(map).sort().map(function(d){return map[d];});
+    var ts=new Date().toLocaleString('zh-CN',{hour12:false}).replace(/\//g,'-');
+    var d={meta:{source:got.source,
+      sourceUrl:got.source.indexOf('东方')>=0?'https://quote.eastmoney.com/center/hszs.html':'https://gu.qq.com/',
+      api:'浏览器手动拉取（JSONP，东财失败自动切换腾讯）',
+      updatedAt:ts,bars:rows.length,start:rows[0].d,end:rows[rows.length-1].d,
+      note:'浏览器手动更新：新数据覆盖同日旧值，历史保留'},
+      names:{a:'中证1000',b:'中证500'},codes:{a:'000852',b:'000905'},data:rows};
+    document.getElementById('errBox').style.display='none';
+    if(J){Object.keys(charts).forEach(function(k){charts[k].dispose();});}
+    boot(d);
+    var newLast=rows[rows.length-1];
+    var changed=added>0 || !oldLast || newLast.a!==oldLast.a || newLast.b!==oldLast.b;
+    btn.textContent='✓ '+ts+(changed?'（新增 '+added+' 日）':'（已是最新，无需变动）');
+  }).catch(function(e){
+    var box=document.getElementById('errBox');
+    box.style.display='block';
+    box.innerHTML='<b>行情更新失败</b>：'+e.message+'。页面仍显示原有数据，可稍后重试。';
+    btn.textContent='↻ 重试更新';
+  }).then(function(){btn.disabled=false;});
+}
+
+document.getElementById('btnRefresh').addEventListener('click',load);
+document.getElementById('btnUpdate').addEventListener('click',updateFromEastmoney);
+if(location.search.indexOf('autoupdate=1')>=0){ updateFromEastmoney(); }
+load();
+</script>
+</body>
+</html>
