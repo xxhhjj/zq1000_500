@@ -99,8 +99,8 @@
     <div class="hero-meta">
       <span class="pill">数据来源 <b>东方财富 · 沪深指数</b> ↗</span>
       <span class="pill small">数据更新 <b id="updatedAt">加载中…</b></span>
-      <span class="pill small">页面版本 <b id="buildVer">v3.2-20261124</b></span>
-      <span class="small">每交易日收盘后自动更新 · GitHub Pages</span>
+      <span class="pill small">页面版本 <b id="buildVer">v3.4-20261125</b></span>
+      <span class="small">每交易日收盘后自动更新</span>
     </div>
   </div>
 </header>
@@ -119,7 +119,7 @@
     <button class="btn on" data-w="ALL">全部</button>
     <span class="spacer"></span>
     <button class="btn ghost" id="btnRefresh">重新加载文件</button>
-    <button class="btn" id="btnUpdate" style="border-color:#1d4ed8;color:#1d4ed8;">↻ 更新行情（东财 / 腾讯）</button>
+    <button class="btn" id="btnUpdate" style="border-color:#1d4ed8;color:#1d4ed8;">↻ 立即更新数据</button>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -171,7 +171,7 @@
       · <b>指标</b>：价差 = 000852 收盘 − 000905 收盘；比价 = 000852 收盘 ÷ 000905 收盘。<br>
       · <b>滚动分位</b>：第 t 日使用 [窗口首日, t] 的已实现样本计算 P10/P25/P50/P75/P90，样本从 1 开始逐步累积（初期带宽为 0，后期趋稳），不使用未来数据。<br>
       · <b>分位排名</b> =（小于当前值的样本数 + 0.5×等于的个数）/ 样本总数 × 100%。<br>
-      · <b>自动更新</b>：GitHub Actions 每个交易日 16:00（北京时间）拉取东财数据并重建 data.json，GitHub Pages 随之发布；页面打开时读取最新 data.json。<br>
+      · <b>自动更新</b>：GitHub Actions 每交易日 16:00（北京时间，收盘后）拉取东财数据并重建 data.json，GitHub Pages 随之发布；页面打开时读取最新 data.json，也可点工具栏按钮手动更新。<br>
       · 本页为价格指数的相对强弱统计刻画，不含分红、基差与展期成本；实盘对应工具为 IM / IC 股指期货，需另计基差。
     </div>
     <div class="disc"><b>免责声明</b>：以上内容基于公开数据和量化分析，仅供参考，不构成投资建议。市场有风险，投资需谨慎。任何投资决策应结合个人风险承受能力、资金状况和投资目标独立判断，必要时咨询持牌专业机构。过往表现不预示未来收益。</div>
@@ -434,48 +434,24 @@ Array.prototype.forEach.call(document.querySelectorAll('.btn[data-w]'),function(
     if(J){ render(b.getAttribute('data-w')); }
   });
 });
-/* JSONP：东财 cb= 是函数调用，腾讯 _var= 是变量赋值，两种都要支持 */
-function jsonp(url, varName, style, timeout){
+/* 数据源只用东方财富：URL 必须 https://，否则 GitHub Pages(HTTPS) 会触发 Mixed Content 拦截 */
+function emJsonp(url, cbName, timeout){
   return new Promise(function(resolve,reject){
     var s=document.createElement('script'), done=false;
-    var ms=timeout||12000;
+    var ms=timeout||15000;
     var t=setTimeout(function(){finish(null,new Error('请求超时（'+Math.round(ms/1000)+'秒）'));},ms);
     function finish(data,err){
       if(done){return;} done=true; clearTimeout(t);
       try{ if(s.parentNode){s.parentNode.removeChild(s);} }catch(e){}
-      if(style==='call'){
-        try{ delete window[varName]; }catch(e){ window[varName]=undefined; }
-      }else{
-        var v=window[varName];
-        try{ delete window[varName]; }catch(e){ window[varName]=undefined; }
-        if(!err&&v===undefined){err=new Error('返回内容为空');}
-        data=v;
-      }
+      try{ delete window[cbName]; }catch(e){ window[cbName]=undefined; }
       if(err){reject(err);}else{resolve(data);}
     }
-    if(style==='call'){
-      window[varName]=function(data){finish(data,null);};
-    }
+    // 东财 cb= 返回的是函数调用：回调名({...})，必须注册为全局函数
+    window[cbName]=function(data){finish(data,null);};
     s.src=url;
-    s.onload=function(){
-      if(style==='var'){ setTimeout(function(){finish(window[varName],null);},0); }
-    };
-    s.onerror=function(){finish(null,new Error('脚本加载失败'));};
+    s.onerror=function(){finish(null,new Error('脚本加载失败（网络不通，或被广告/隐私插件拦截）'));};
     document.head.appendChild(s);
   });
-}
-
-function rowsFromMaps(ma,mb){
-  var rows=[];
-  Object.keys(ma).forEach(function(d){
-    if(mb[d]&&mb[d]>0&&ma[d]>0){
-      rows.push({d:d,a:ma[d],b:mb[d],
-        s:Math.round((ma[d]-mb[d])*100)/100,
-        r:Math.round(ma[d]/mb[d]*1000000)/1000000});
-    }
-  });
-  rows.sort(function(x,y){return x.d<y.d?-1:1;});
-  return rows;
 }
 
 function fetchEastmoney(){
@@ -483,8 +459,8 @@ function fetchEastmoney(){
   var base='https://push2his.eastmoney.com/api/qt/stock/kline/get?klt=101&fqt=1&beg=0&end=20500101'
     +'&lmt=100000&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58&cb=';
   return Promise.all([
-    jsonp(base+ca+'&secid=1.000852&_='+stamp,ca,'call',12000),
-    jsonp(base+cb+'&secid=1.000905&_='+stamp,cb,'call',12000)
+    emJsonp(base+ca+'&secid=1.000852&_='+stamp,ca,15000),
+    emJsonp(base+cb+'&secid=1.000905&_='+stamp,cb,15000)
   ]).then(function(rs){
     var ma={},mb={};
     ((rs[0]&&rs[0].data&&rs[0].data.klines)||[]).forEach(function(l){
@@ -493,88 +469,60 @@ function fetchEastmoney(){
     ((rs[1]&&rs[1].data&&rs[1].data.klines)||[]).forEach(function(l){
       var p=l.split(','); if(p.length>2){mb[p[0]]=parseFloat(p[2]);}
     });
-    var rows=rowsFromMaps(ma,mb);
+    var rows=[];
+    Object.keys(ma).forEach(function(d){
+      if(mb[d]&&mb[d]>0&&ma[d]>0){
+        rows.push({d:d,a:ma[d],b:mb[d],
+          s:Math.round((ma[d]-mb[d])*100)/100,
+          r:Math.round(ma[d]/mb[d]*1000000)/1000000});
+      }
+    });
+    rows.sort(function(x,y){return x.d<y.d?-1:1;});
     if(rows.length<100){throw new Error('返回样本不足（'+rows.length+'）');}
-    return {rows:rows,source:'东方财富网 · 沪深指数行情中心'};
+    return rows;
   });
 }
 
-function fetchTencent(){
-  var stamp=Date.now(), ca='txA'+stamp, cb='txB'+stamp;
-  var base='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=';
-  var tail=',day,2019-01-01,2030-12-31,2000,qfq&_var=';
-  return Promise.all([
-    jsonp(base+'sh000852'+tail+ca+'&_='+stamp,ca,'var',12000),
-    jsonp(base+'sh000905'+tail+cb+'&_='+stamp,cb,'var',12000)
-  ]).then(function(rs){
-    var ma={},mb={};
-    var da=(rs[0]&&rs[0].data&&rs[0].data.sh000852&&rs[0].data.sh000852.day)||
-           (rs[0]&&rs[0].data&&rs[0].data.sh000852&&rs[0].data.sh000852.qfqday)||[];
-    var db=(rs[1]&&rs[1].data&&rs[1].data.sh000905&&rs[1].data.sh000905.day)||
-           (rs[1]&&rs[1].data&&rs[1].data.sh000905&&rs[1].data.sh000905.qfqday)||[];
-    da.forEach(function(x){ma[x[0]]=parseFloat(x[2]);});
-    db.forEach(function(x){mb[x[0]]=parseFloat(x[2]);});
-    var rows=rowsFromMaps(ma,mb);
-    if(rows.length<100){throw new Error('返回样本不足（'+rows.length+'）');}
-    return {rows:rows,source:'腾讯财经 · 沪深指数日线（兜底源）'};
-  });
-}
-
+var autoBusy=false;
 function updateFromEastmoney(){
+  if(autoBusy){return;} autoBusy=true;
   var btn=document.getElementById('btnUpdate');
   btn.disabled=true; btn.textContent='正在拉取行情…';
   var oldLast=(J&&J.data&&J.data.length)?J.data[J.data.length-1]:null;
-  var oldCount=J&&J.data?J.data.length:0;
-  var errors=[];
-  var chain=[fetchEastmoney,fetchTencent], i=0, best=null;
-  function next(){
-    if(i<chain.length){
-      return chain[i++]().then(function(r){
-        if(!best||r.rows[r.rows.length-1].d>best.rows[best.rows.length-1].d){best=r;}
-        // 已拿到比本地更新的数据就不必再试兜底源
-        if(best.rows[best.rows.length-1].d>(oldLast?oldLast.d:'')){i=chain.length;}
-        return next();
-      }).catch(function(e){
-        errors.push((i===1?'东方财富':'腾讯财经')+'：'+(e&&e.message?e.message:'未知错误'));
-        return next();
-      });
-    }
-    return Promise.resolve(best);
-  }
-  next().then(function(got){
-    if(!got){throw new Error('两个数据源均不可用（'+errors.join('；')+'）');}
+  fetchEastmoney().then(function(fresh){
     var map={}, rows=(J&&J.data)?J.data.slice():[];
     rows.forEach(function(r){map[r.d]=r;});
     var added=0;
-    got.rows.forEach(function(r){
+    fresh.forEach(function(r){
       if(!map[r.d]){added++;}
       map[r.d]=r;
     });
     rows=Object.keys(map).sort().map(function(d){return map[d];});
     var ts=new Date().toLocaleString('zh-CN',{hour12:false}).replace(/\//g,'-');
-    var d={meta:{source:got.source,
-      sourceUrl:got.source.indexOf('东方')>=0?'https://quote.eastmoney.com/center/hszs.html':'https://gu.qq.com/',
-      api:'浏览器手动拉取（JSONP，东财失败自动切换腾讯）',
+    var d={meta:{source:'东方财富网 · 沪深指数行情中心',
+      sourceUrl:'https://quote.eastmoney.com/center/hszs.html',
+      api:'https://push2his.eastmoney.com/api/qt/stock/kline/get',
       updatedAt:ts,bars:rows.length,start:rows[0].d,end:rows[rows.length-1].d,
-      note:'浏览器手动更新：新数据覆盖同日旧值，历史保留'},
+      note:'浏览器手动拉取（东财 HTTPS JSONP）；新数据覆盖同日旧值，历史保留'},
       names:{a:'中证1000',b:'中证500'},codes:{a:'000852',b:'000905'},data:rows};
     document.getElementById('errBox').style.display='none';
     if(J){Object.keys(charts).forEach(function(k){charts[k].dispose();});}
     boot(d);
-    var newLast=rows[rows.length-1];
-    var changed=added>0 || !oldLast || newLast.a!==oldLast.a || newLast.b!==oldLast.b;
-    btn.textContent='✓ '+ts+(changed?'（新增 '+added+' 日）':'（已是最新，无需变动）');
+    var n=rows[rows.length-1];
+    var changed=added>0 || !oldLast || n.a!==oldLast.a || n.b!==oldLast.b;
+    btn.textContent='✓ '+ts+(changed?'（新增 '+added+' 日）':'（已是最新）');
   }).catch(function(e){
     var box=document.getElementById('errBox');
     box.style.display='block';
-    box.innerHTML='<b>行情更新失败</b>：'+e.message+'。页面仍显示原有数据，可稍后重试。';
+    box.innerHTML='<b>行情更新失败</b>：'+e.message+'。页面仍显示原有数据，可稍后手动点击重试。';
     btn.textContent='↻ 重试更新';
-  }).then(function(){btn.disabled=false;});
+  }).then(function(){autoBusy=false; btn.disabled=false;});
 }
 
 document.getElementById('btnRefresh').addEventListener('click',load);
 document.getElementById('btnUpdate').addEventListener('click',updateFromEastmoney);
-if(location.search.indexOf('autoupdate=1')>=0){ updateFromEastmoney(); }
+// 仅当显式带 ?autoupdate=1 时才自动触发一次，正常访问只读 data.json
+if(location.search.indexOf('autoupdate=1')>=0){ setTimeout(function(){updateFromEastmoney();},600); }
 load();
 </script>
 </body>
