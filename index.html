@@ -445,7 +445,7 @@ function render(w){
   document.getElementById('strip').innerHTML=
     '<span class="chip '+zc+'">相对状态 <b>'+zone+'</b></span>'+
     '<span class="chip">窗口 <b>'+WINLAB[w]+' · '+sub.length+' 个交易日</b></span>'+
-    '<span class="chip">数据区间 <b>'+D[0].d+' ~ '+ld.d+'</b></span>'+
+    '<span class="chip">数据区间 <b>'+sub[0].d+' ~ '+sub[sub.length-1].d+'</b></span>'+
     '<span class="chip">末日中证1000 <b>'+f2(ld.a)+'</b></span>'+
     '<span class="chip">末日中证500 <b>'+f2(ld.b)+'</b></span>';
 
